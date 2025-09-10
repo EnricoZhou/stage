@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Dichiarazione XML: definisce la versione e la codifica -->
+
+<module type="PYTHON_MODULE" version="4">
+  <!-- Il modulo è di tipo Python, versione del formato di configurazione 4 -->
+
+  <component name="NewModuleRootManager">
+    <!-- Gestisce le directory principali del modulo -->
+
+    <content url="file://$MODULE_DIR$">
+      <!-- La radice del modulo è la directory corrente del modulo -->
+
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <!-- La cartella "src" è considerata una cartella sorgente (non di test) -->
+
+      <excludeFolder url="file://$MODULE_DIR$/out" />
+      <!-- La cartella "out" è esclusa dalla gestione del progetto (output, build, ecc.) -->
+    </content>
+
+    <orderEntry type="jdk" jdkName="Python 3.7 (ct-tf21-py37)" jdkType="Python SDK" />
+    <!-- Specifica l'interprete Python usato: Python 3.7 con nome specifico -->
+
+    <orderEntry type="sourceFolder" forTests="false" />
+    <!-- Indica una cartella sorgente generica (non usata per test) -->
+  </component>
+
+  <component name="PyDocumentationSettings">
+    <!-- Impostazioni relative alla documentazione del codice Python -->
+
+    <option name="format" value="GOOGLE" />
+    <!-- Si usa il formato di docstring in stile Google -->
+
+    <option name="myDocStringFormat" value="Google" />
+    <!-- Anche qui si conferma il formato Google (ridondanza per compatibilità) -->
+
+    <option name="renderExternalDocumentation" value="true" />
+    <!-- Abilita la visualizzazione della documentazione esterna (es. doc ufficiali nei tooltip) -->
+  </component>
+
+  <component name="TestRunnerService">
+    <!-- Impostazioni del sistema di test automatico -->
+
+    <option name="PROJECT_TEST_RUNNER" value="pytest" />
+    <!-- Il test runner predefinito del progetto è `pytest` -->
+  </component>
+
+</module>

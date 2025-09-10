@@ -1,0 +1,43 @@
+tensorflow==2.13.0
+numpy==1.24.3
+scikit-learn==1.2.2
+pandas==2.0.1
+matplotlib==3.7.1
+seaborn==0.12.2
+scipy==1.10.1
+h5py==3.8.0
+jupyter==1.0.0
+notebook==7.0.0
+requests==2.31.0
+nltk==3.8.1
+# result_processing
+tensorflow_hub
+transformers==4.30.2
+
+'''
+pip install numpy==1.19.5 scipy==1.5.4 pandas==1.0.5 scikit-learn==0.23.2
+pip install tensorflow==2.1.0
+pip install "absl-py<=0.9" "protobuf<=3.20.3"
+pip install transformers==2.11.0
+'''
+
+'''
+# TensorFlow per Apple Silicon (CPU + GPU via Metal)
+tensorflow-macos==2.16.1
+tensorflow-metal==1.1.0
+
+# Librerie utili per il progetto
+scipy==1.13.1
+numpy==1.26.4
+pandas==2.2.2
+absl-py==2.1.0
+
+# HuggingFace Transformers (tokenizer e modelli BERT)
+transformers==4.44.2
+
+# TensorFlow Hub (opzionale, solo se vuoi caricare modelli da TF Hub)
+tensorflow-hub==0.16.1
+
+# Per parsing date e JSON
+python-dateutil==2.9.0
+'''
