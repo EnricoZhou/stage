@@ -28,6 +28,13 @@ from absl import app
 from absl import flags
 import tensorflow as tf
 
+# AGGIUNTO
+'''import multiprocessing
+num_cpu = multiprocessing.cpu_count()
+print("Using", num_cpu, "CPU threads")
+tf.config.threading.set_intra_op_parallelism_threads(num_cpu)
+tf.config.threading.set_inter_op_parallelism_threads(num_cpu)'''
+
 
 from tf_official.nlp import bert_modeling as modeling
 from tf_official.nlp.bert import tokenization, common_flags
@@ -118,10 +125,86 @@ flags.DEFINE_string("simulation_mode", 'simple', "simple, multiplicative, or int
 
 flags.DEFINE_string("prediction_file", "../output/predictions.tsv", "path where predictions (tsv) will be written")
 
+# AGGIUNTO
+flags.DEFINE_bool("no_dragon", False, "Use simple MLP baseline without BERT")
+
 FLAGS = flags.FLAGS
 
+'''# AGGIUNTO
+def _keras_format(features, labels):
+    y = labels['outcome']
+    t = tf.cast(labels['treatment'], tf.float32)
+
+    # match shape (batch_size, 1)
+    y = tf.expand_dims(y, -1)
+    t = tf.expand_dims(t, -1)
+
+    # labels come tuple nello stesso ordine degli output [g, q0, q1]
+    labels = (t, y, y)
+
+    # sample_weights come tuple nello stesso ordine
+    sample_weights = (
+        tf.ones_like(t, dtype=tf.float32),  # per g
+        1 - t,                             # per q0
+        t                                  # per q1
+    )
+
+    return features, labels, sample_weights'''
 
 def _keras_format(features, labels):
+    y = labels['outcome']
+    t = tf.cast(labels['treatment'], tf.float32)
+
+    y = tf.expand_dims(y, -1)
+    t = tf.expand_dims(t, -1)
+
+    if FLAGS.do_masking:
+        # Usa le features per costruire un dummy della forma giusta
+        # input_word_ids ha shape (batch, seq_len)
+        seq_len = tf.shape(features['input_word_ids'])[1]
+        vocab_size = 30522  # default BERT vocab size, puoi parametrizzarlo se diverso
+
+        dummy_unsup = tf.zeros((tf.shape(t)[0], seq_len, vocab_size), dtype=tf.float32)
+
+        labels = {
+            'g': t,
+            'q0': y,
+            'q1': y,
+            'unsup': dummy_unsup
+        }
+        sample_weights = {
+            'g': tf.ones_like(t, dtype=tf.float32),
+            'q0': 1 - t,
+            'q1': t,
+            'unsup': 1.0
+        }
+    else:
+        labels = (t, y, y)
+        sample_weights = (tf.ones_like(t, dtype=tf.float32), 1 - t, t)
+
+    return features, labels, sample_weights
+
+
+
+# AGGIUNTO
+"""def _keras_format(features, labels):
+    y = labels['outcome']
+    t = tf.cast(labels['treatment'], tf.float32)
+
+    # labels come lista, stesso ordine degli outputs [g, q0, q1]
+    labels = [labels['treatment'], y, y]
+
+    # sample_weights come lista nello stesso ordine
+    sample_weights = [
+        tf.ones_like(t, dtype=tf.float32),  # peso costante per g
+        1 - t,                             # per q0
+        t                                  # per q1
+    ]
+
+    return features, labels, sample_weights"""
+
+# MODIFICATO
+"""def _keras_format(features, labels):
     # features, labels = sample
     y = labels['outcome']
     t = tf.cast(labels['treatment'], tf.float32)
@@ -134,7 +217,7 @@ def _keras_format(features, labels):
         'q1': t
     }
     return features, labels, sample_weights
-
+"""
 
 def make_dataset(is_training: bool, do_masking=False):
     if FLAGS.simulated == 'real':
@@ -179,6 +262,13 @@ def make_dataset(is_training: bool, do_masking=False):
         shuffle_buffer_size=25000,  # note: bert hardcoded this, and I'm following suit
         seed=FLAGS.seed,
         labeler=labeler)
+    
+    # AGGIUNTO: stampa quanti esempi ci sono in ogni split per capire se davvero i folds vengono vegerati corretamente
+    '''count = 0
+    for _ in train_input_fn(params={'batch_size': 1}):
+        count += 1
+    print("Total examples in this split:", count)'''
+
 
     batch_size = FLAGS.train_batch_size if is_training else FLAGS.eval_batch_size
 
@@ -189,7 +279,10 @@ def make_dataset(is_training: bool, do_masking=False):
         dataset = filter_training(dataset)
         dataset = dataset.map(_keras_format, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
+    # AGGIUNTO: così i dati restano in RAM e non rallentano la GPU.
+    dataset = dataset.cache()
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
 
     return dataset
 
@@ -216,6 +309,32 @@ def main(_):
     assert tf.version.VERSION.startswith('2.1')
     tf.random.set_seed(FLAGS.seed)
 
+    # AGGIUNTO: forzo l'uso della GPU se disponibile
+    print("Dispositivi disponibili:", tf.config.list_physical_devices())
+
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Limita TensorFlow a usare SOLO la prima GPU
+            tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+            tf.config.experimental.set_memory_growth(gpus[0], True)
+            print("✅ Uso GPU:", gpus[0])
+        except RuntimeError as e:
+            print("Errore nella configurazione GPU:", e)
+    else:
+        print("⚠️ Nessuna GPU trovata, userò solo CPU")
+
+
+    # AGGIUNTO per verificare se utilizza la GPU
+    '''print("Dispositivi fisici disponibili:", tf.config.list_physical_devices())
+    print("Dispositivi logici disponibili:", tf.config.list_logical_devices())
+
+    if tf.config.list_physical_devices('GPU'):
+        print("✅ GPU rilevata: le operazioni useranno la GPU tramite Metal")
+    else:
+        print("⚠️ Nessuna GPU rilevata: si userà solo la CPU")'''
+
+
     # with tf.io.gfile.GFile(FLAGS.input_meta_data_path, 'rb') as reader:
     #     input_meta_data = json.loads(reader.read().decode('utf-8'))
 
@@ -226,8 +345,8 @@ def main(_):
     #
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
     epochs = FLAGS.num_train_epochs
-    # train_data_size = 11778
-    train_data_size = 5000
+    train_data_size = 11778
+    # train_data_size = 100
     steps_per_epoch = int(train_data_size / FLAGS.train_batch_size)  # 368
     warmup_steps = int(epochs * train_data_size * 0.1 / FLAGS.train_batch_size)
     initial_lr = FLAGS.learning_rate
@@ -248,8 +367,14 @@ def main(_):
 
     # the model
     def _get_dragon_model(do_masking):
+        # AGGIUNTO
+        if FLAGS.no_dragon:
+            dragon_model = bert_models.no_dragon_model(input_dim=5000, binary_outcome=True)
+            core_model = None
+        
+            
         if not FLAGS.fixed_feature_baseline:
-            dragon_model, core_model = (
+                dragon_model, core_model = (
                 bert_models.dragon_model(
                     bert_config,
                     max_seq_length=FLAGS.max_seq_length,
@@ -289,26 +414,66 @@ def main(_):
                 dragon_model.load_weights(latest_checkpoint)
 
             # AGGIUNTO
-            dragon_model.compile(
+            if FLAGS.do_masking:
+            # versione con masked language modeling (unsup loss attiva)
+                dragon_model.compile(
+                    optimizer=optimizer,
+                    loss={
+                        'g': 'binary_crossentropy',
+                        'q0': 'binary_crossentropy',
+                        'q1': 'binary_crossentropy',
+                        # loss identity per la parte unsupervised (masked LM)
+                        'unsup': lambda y_true, y_pred: tf.reduce_mean(y_pred)
+                    },
+                    loss_weights={
+                        'g': FLAGS.treatment_loss_weight,
+                        'q0': 0.1,
+                        'q1': 0.1,
+                        'unsup': 1.0   # peso della loss unsup (puoi regolarlo)
+                    },
+                    metrics={
+                        'g': ['accuracy'],
+                        'q0': ['accuracy'],
+                        'q1': ['accuracy']
+                    }
+                )
+            else:
+                # versione standard senza masking
+                dragon_model.compile(
+                    optimizer=optimizer,
+                    loss=['binary_crossentropy', 'binary_crossentropy', 'binary_crossentropy'],
+                    loss_weights=[FLAGS.treatment_loss_weight, 0.1, 0.1],
+                    metrics=['accuracy', 'accuracy', 'accuracy']
+                )
+
+            '''dragon_model.compile(
+                optimizer=optimizer,
+                loss=['binary_crossentropy', 'binary_crossentropy', 'binary_crossentropy'],
+                loss_weights=[FLAGS.treatment_loss_weight, 0.1, 0.1],
+                metrics=['accuracy', 'accuracy', 'accuracy']
+            )'''
+
+            # AGGIUNTO
+            '''dragon_model.compile(
                 optimizer=optimizer,
                 loss={
                     'g': 'binary_crossentropy',
                     'q0': 'binary_crossentropy',
-                    'q1': 'binary_crossentropy'
+                    'q1': 'binary_crossentropy',
+                    'unsup': lambda y_true, y_pred: tf.reduce_mean(y_pred)  # loss identity
                 },
                 loss_weights={
                     'g': FLAGS.treatment_loss_weight,
                     'q0': 0.1,
-                    'q1': 0.1
+                    'q1': 0.1,
+                    'unsup': unsup_scale
                 },
                 metrics={
                     'g': ['accuracy'],
                     'q0': ['accuracy'],
                     'q1': ['accuracy']
                 }
-            )
-
-
+            )'''
 
             # MODIFICATO
             '''dragon_model.compile(optimizer=optimizer,
@@ -325,14 +490,16 @@ def main(_):
 
             callbacks = [summary_callback, checkpoint_callback]
 
-            dragon_model.fit(
-                x=keras_train_data,
-                # validation_data=evaluation_dataset,
-                steps_per_epoch=steps_per_epoch,
-                epochs=epochs,
-                # vailidation_steps=eval_steps,
-                callbacks=callbacks)
-
+            # forza l'uso della GPU
+            with tf.device('/GPU:0'):
+                dragon_model.fit(
+                    x=keras_train_data,
+                    # validation_data=evaluation_dataset,
+                    steps_per_epoch=steps_per_epoch,
+                    epochs=epochs,
+                    # vailidation_steps=eval_steps,
+                    callbacks=callbacks)
+                
         # save a final model checkpoint (so we can restore weights into model w/o training idiosyncracies)
         if FLAGS.model_export_path:
             model_export_path = FLAGS.model_export_path
@@ -356,17 +523,38 @@ def main(_):
     # MODIFICATO: Per evitare errori sui pesi mancanti
     # checkpoint.restore(saved_path).assert_existing_objects_matched()
     # loss added as simple hack to bizzarre keras bug that requires compile for predict, and a loss for compile
-    dragon_model.add_loss(lambda: 0)
+    
+    # MODIFICATO: per evitare warning
+    # dragon_model.add_loss(tf.constant(0.0))
+    # loss added as simple hack to bizzarre keras bug that requires compile for predict, and a loss for compile
     dragon_model.compile()
 
     outputs = dragon_model.predict(x=eval_data)
 
-    out_dict = {}
+    # AGGIUNTO
+    # outputs è una lista: [g, q0, q1]
+    out_dict = {
+        'g':  outputs[0].reshape(-1),
+        'q0': outputs[1].reshape(-1),
+        'q1': outputs[2].reshape(-1),
+    }
+
+    # Ora puoi creare il DataFrame
+    predictions = pd.DataFrame(out_dict)
+
+    # AGGIUNTO
+    ''' out_dict = {}
+    out_dict['g']  = outputs['g']
+    out_dict['q0'] = outputs['q0']
+    out_dict['q1'] = outputs['q1']'''
+
+    # MODIFICATO: da lista di array a dizionario di array
+    """out_dict = {}
     out_dict['g'] = outputs[0].squeeze()
     out_dict['q0'] = outputs[1].squeeze()
     out_dict['q1'] = outputs[2].squeeze()
 
-    predictions = pd.DataFrame(out_dict)
+    predictions = pd.DataFrame(out_dict)"""
 
     label_dataset = eval_data.map(lambda f, l: l)
     data_df = dataset_to_pandas_df(label_dataset)
@@ -377,7 +565,7 @@ def main(_):
 
 
 if __name__ == '__main__':
-    flags.mark_flag_as_required('bert_config_file')
+    # flags.mark_flag_as_required('bert_config_file')
     # flags.mark_flag_as_required('input_meta_data_path')
     # flags.mark_flag_as_required('model_dir')
     app.run(main)

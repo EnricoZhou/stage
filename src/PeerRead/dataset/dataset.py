@@ -426,7 +426,13 @@ def dataset_processing(dataset, parser, masker, labeler,
                               masker,  # Bert style token masking for unsupervised training
                               _make_bert_compatifier(do_masking))  # Limit features to those expected by BERT model
 
-    dataset = dataset.map(data_processing, 4)
+    # AGGIUNTO
+    dataset = dataset.map(data_processing, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.cache()
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+    # MODIFICATO
+    # dataset = dataset.map(data_processing, 4)
 
     if filter_test:
         def filter_test_fn(data):
@@ -449,6 +455,8 @@ def make_dataset_fn_from_file(input_files_or_glob, seq_length,
                               do_masking=True,
                               filter_test=False,
                               shuffle_buffer_size=100, seed=0, labeler=None):
+
+
     input_files = []
     for input_pattern in input_files_or_glob.split(","):
         input_files.extend(tf.io.gfile.glob(input_pattern))
@@ -488,7 +496,24 @@ def make_dataset_fn_from_file(input_files_or_glob, seq_length,
                                                    batch_size, filter_test, shuffle_buffer_size)
             return processed_dataset
 
-        dataset = dataset.interleave(_dataset_processing)
+        # dataset = dataset.interleave(_dataset_processing)
+
+        dataset = dataset.interleave(
+            lambda x: _dataset_processing(x),
+            cycle_length=tf.data.AUTOTUNE,
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+
+
+        '''raw_dataset = tf.data.TFRecordDataset(input_files)
+        count = sum(1 for _ in raw_dataset)
+        print("Numero totale di esempi nel TFRecord:", count)'''
+
+        # 👇 Aggiungi questa riga per limitare il numero di esempi
+        # dataset = dataset.take(100)
 
         ''' # ============================
         # <<< AGGIUNTA: rinomina & cast
@@ -513,6 +538,25 @@ def make_dataset_fn_from_file(input_files_or_glob, seq_length,
             num_parallel_calls=tf.data.AUTOTUNE
         )
         # ============================'''
+
+        # AGGIUNTO
+                # Rinominare e castare le feature per compatibilità con BERT
+        '''dataset = dataset.map(
+            lambda features, labels: (
+                {
+                    # usa token_ids come input_word_ids
+                    "input_word_ids": tf.cast(features["token_ids"], tf.int32),
+                    # usa token_mask come input_mask
+                    "input_mask": tf.cast(features["token_mask"], tf.int32),
+                    # se non esistono segment_ids, metti tutto a zero
+                    "segment_ids": tf.zeros_like(features["token_ids"], dtype=tf.int32),
+                },
+                labels
+            ),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+
+        dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)'''
 
 
         return dataset
@@ -574,10 +618,10 @@ def main():
     dev_splits = []
     test_splits = [1, 2]
 
-    # labeler = make_buzzy_based_simulated_labeler(0.5, 5.0, 0.0, 'simple',
-    #                                              seed=0)
+    labeler = make_buzzy_based_simulated_labeler(0.5, 5.0, 0.0, 'simple',
+                                                 seed=0)
 
-    labeler = make_real_labeler('venue', 'accepted')
+    # labeler = make_real_labeler('venue', 'accepted')
 
     input_dataset_from_filenames = make_dataset_fn_from_file(filename,
                                                              250,
@@ -594,13 +638,13 @@ def main():
     params = {'batch_size': 10000}
     dataset = input_dataset_from_filenames(params)
 
-    print(dataset.element_spec)
+    # print(dataset.element_spec)
 
     for val in dataset.take(1):
         sample = val
 
     sample = next(iter(dataset))
-    print(tf.unique(sample[1]['treatment']))
+    # print(tf.unique(sample[1]['treatment']))
 
     # print(sample[0]['masked_lm_ids'])
 

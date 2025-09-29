@@ -20,7 +20,11 @@ from __future__ import print_function
 
 import tensorflow as tf
 import tensorflow_hub as hub
-from tensorflow.keras.layers import Lambda
+# from tensorflow.keras.layers import Lambda
+
+# AGGOIUNTO
+# from keras import ops
+import keras
 
 from tf_official.nlp import bert_modeling as modeling
 from tf_official.nlp.bert_models import pretrain_model
@@ -200,7 +204,8 @@ def derpy_dragon_baseline(bert_config,
         config=bert_config)
     bert_model.trainable = False
     sequence_output = bert_model.outputs[1]
-    sum_sequence_output = tf.reduce_sum(sequence_output, axis=1)
+    # sum_sequence_output = tf.reduce_sum(sequence_output, axis=1)
+    sum_sequence_output = keras.layers.Lambda(lambda x: tf.reduce_sum(x, axis=1))(sequence_output)
     sum_sequence_output = tf.keras.layers.Dense(500, activation='relu')(sum_sequence_output)
     sum_sequence_output = tf.keras.layers.Dense(200, activation='relu')(sum_sequence_output)
 
@@ -266,6 +271,27 @@ def cross_ent(y_true, y_pred, sample_weight):
     )
 
     return dragon_model, bert_model'''
+
+class MeanLossLayer(tf.keras.layers.Layer):
+    def __init__(self, scale=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.scale = scale
+
+    def call(self, x):
+        return self.scale * tf.reduce_mean(x)
+    
+# AGGIUNTO
+class UnsupervisedLossLayer(tf.keras.layers.Layer):
+    def __init__(self, scale=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.scale = scale
+
+    def call(self, y_pred):
+        # aggiunge la loss senza richiedere y_true
+        self.add_loss(self.scale * tf.reduce_mean(y_pred))
+        return y_pred
+
+
 def dragon_model(bert_config,
                  max_seq_length: int,
                  binary_outcome: bool,
@@ -296,8 +322,13 @@ def dragon_model(bert_config,
             initializer=None
         )
         inputs = pt_model.input
-        unsup_loss = pt_model.outputs
-        unsup_loss = unsup_scale * tf.reduce_mean(unsup_loss)
+
+        # MODIFICATO
+        # unsup_loss = unsup_scale * tf.reduce_mean(pt_model.output)
+
+        # AGGIUNTO
+        unsup_loss = MeanLossLayer(scale=unsup_scale, name="unsup_loss")(pt_model.output)
+
 
         # Ottieni pooled_output dal backbone BERT
         pooled_output, sequence_output = bert_model.outputs
@@ -328,7 +359,7 @@ def dragon_model(bert_config,
 
         pooled_output, sequence_output = bert_model.outputs
 
-        unsup_loss = lambda: 0  # placeholder
+        # unsup_loss = lambda: 0  # placeholder
 
     # Teste finali di DragonNet (tutte su pooled_output → shape (batch,1))
     out_g = tf.keras.layers.Dense(1, activation='sigmoid', name='g')(pooled_output)
@@ -345,20 +376,47 @@ def dragon_model(bert_config,
     out_q1 = tf.keras.layers.Dense(200, activation='relu')(out_q1)
     out_q1 = tf.keras.layers.Dense(1, activation=activation, name='q1')(out_q1)
 
-    print("pooled_output:", pooled_output.shape)
+    ''' print("pooled_output:", pooled_output.shape)
     print("out_g:", out_g.shape)
     print("out_q0:", out_q0.shape)
-    print("out_q1:", out_q1.shape)
+    print("out_q1:", out_q1.shape)'''
     # Modello finale
-    dragon_model = tf.keras.Model(
+    '''ragon_model = tf.keras.Model(
         inputs=inputs,
         outputs={'g': out_g, 'q0': out_q0, 'q1': out_q1},
         name='dragon_model'
-    )
+    )'''
+
+    '''# MODIFICATO MASKING=FALSE
+    dragon_model = tf.keras.Model(
+        inputs=inputs,
+        # outputs={'g': out_g, 'q0': out_q0, 'q1': out_q1, 'unsup': unsup_loss},
+        outputs=[out_g, out_q0, out_q1],
+        name='dragon_model'
+    )'''
+
+    # AGGIUNTO PER MASKING TRUE O FALSE
+    if use_unsup:
+        unsup_output = UnsupervisedLossLayer(scale=unsup_scale, name="unsup")(pt_model.output)
+
+        dragon_model = tf.keras.Model(
+            inputs=inputs,
+            outputs={'g': out_g, 'q0': out_q0, 'q1': out_q1, 'unsup': unsup_output},
+            name='dragon_model'
+        )
+    else:
+        dragon_model = tf.keras.Model(
+            inputs=inputs,
+            outputs=[out_g, out_q0, out_q1],
+            name='dragon_model'
+        )
+
+
 
     # Aggiungi la unsupervised loss se attiva
-    if use_unsup:
-        dragon_model.add_loss(unsup_loss)
+    '''if use_unsup and unsup_loss is not None:
+        dragon_model.add_loss(unsup_loss)'''
+
 
 
     return dragon_model, bert_model
@@ -518,3 +576,29 @@ if __name__ == '__main__':
     derp = derpy_dragon_baseline(bert_config,
                                  max_seq_length,
                                  binary_outcome)
+
+
+# AGGIUNTO
+
+def no_dragon_model(input_dim=5000, binary_outcome=True):
+    """
+    Baseline 'no-dragon': semplice MLP senza BERT.
+    Usa come input un vettore di dimensione input_dim (es. bag-of-words).
+    """
+    inputs = tf.keras.layers.Input(shape=(input_dim,), name="bow_input")
+
+    # rete feedforward semplice
+    x = tf.keras.layers.Dense(256, activation="relu")(inputs)
+    x = tf.keras.layers.Dense(128, activation="relu")(x)
+
+    # teste
+    g = tf.keras.layers.Dense(1, activation="sigmoid", name="g")(x)
+    if binary_outcome:
+        q0 = tf.keras.layers.Dense(1, activation="sigmoid", name="q0")(x)
+        q1 = tf.keras.layers.Dense(1, activation="sigmoid", name="q1")(x)
+    else:
+        q0 = tf.keras.layers.Dense(1, activation=None, name="q0")(x)
+        q1 = tf.keras.layers.Dense(1, activation=None, name="q1")(x)
+
+    model = tf.keras.Model(inputs=inputs, outputs=[g, q0, q1], name="no_dragon_model")
+    return model

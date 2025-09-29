@@ -206,9 +206,19 @@ def dataset_to_pandas_df(dataset):
         for k, v in sample.items():
             samp_dict[k] += [v.numpy().squeeze()]
 
+    # AGGIUNTO
     proto_dict = {}
     for k, v in samp_dict.items():
-        proto_dict[k] = np.concatenate(v)
+        if len(v) > 0:
+            proto_dict[k] = np.concatenate([np.atleast_1d(x) for x in v])
+        else:
+            proto_dict[k] = np.array([])
+
+
+    # MODIFICATO
+    '''proto_dict = {}
+    for k, v in samp_dict.items():
+        proto_dict[k] = np.concatenate(v)'''
 
     df = pd.DataFrame(proto_dict)
 
@@ -406,7 +416,7 @@ def main():
     for samp in dit:
         s = samp
     t1 = time.time()
-    print(t1 - t0)
+    '''print(t1 - t0)'''
 
     # data = make_unprocessed_PeerRead_dataset('../dat/PeerRead/proc/arxiv-all.tf_record', 250)
     # label_df = dataset_to_pandas_df(data)

@@ -56,42 +56,72 @@ def att_from_bert_tsv(tsv_path, test_split=True, trim=0.0):
 
     return estimates
 
-
-def dragon_att(output_dir, test_split=True, trim=0.03, trim_test=False):
+def att_from_atm_tsv(path, deps=0.001, trim=0.03):
     """
-    Expects that the data was split into k folds, and the predictions from each fold
-    was saved in experiment_dir/[fold_identifier]/[prediction_file].tsv.
-
-    :param output_dir:
-    :return:
+    Carica un file predictions_atm.tsv (colonne: outcome, treatment, g, q0, q1)
+    e calcola le stime ATT con trimming sui propensity scores (g ∈ [0.03, 0.97]).
     """
+    if not os.path.exists(path):
+        print(f"⚠️ File non trovato: {path}")
+        return None
 
-    data_files = sorted(glob.glob(f'{output_dir}/*/*.tsv', recursive=True))
+    df = pd.read_csv(path, sep="\t")
+    if df.empty:
+        print(f"⚠️ File vuoto: {path}")
+        return None
+
+    required_cols = {"outcome", "treatment", "g", "q0", "q1"}
+    if not required_cols.issubset(df.columns):
+        print(f"⚠️ Colonne mancanti in {path}. Trovate: {df.columns}")
+        return None
+
+    y = df["outcome"].values.astype(float)
+    t = df["treatment"].values.astype(int)
+    g = df["g"].values.astype(float)
+    q0 = df["q0"].values.astype(float)
+    q1 = df["q1"].values.astype(float)
+
+    # ✅ trimming come nel paper
+    mask = (g >= trim) & (g <= 1 - trim)
+    if mask.sum() == 0:
+        print(f"⚠️ Nessun esempio valido dopo trimming in {path}")
+        return None
+
+    y, t, g, q0, q1 = y[mask], t[mask], g[mask], q0[mask], q1[mask]
+
+    prob_t = t.mean()
+    return att_estimates(q0, q1, g, t, y, prob_t, deps=deps)
+
+
+def dragon_att(output_dir, deps=0.001, trim=0.03, test_split=True, trim_test=False):
+    """
+    Media delle stime ATT per tutti i file TSV in una cartella,
+    con trimming integrato (g ∈ [0.03, 0.97]).
+    """
+    data_files = sorted(glob.glob(f'{output_dir}/*.tsv', recursive=True))
     estimates = []
-    # AGGIUNTO
-    all_estimates = None   # <--- inizializzato
+    all_estimates = None
 
     for data_file in data_files:
-        try:
-            all_estimates = att_from_bert_tsv(data_file, test_split=test_split, trim=trim)
-            # print(psi_estimates)
-            estimates += [all_estimates]
-        except:
-            print('wtf')
-            print(data_file)
+        all_estimates = att_from_atm_tsv(data_file, deps=deps, trim=trim)
+        if all_estimates is None:
+            print(f"❌ Skipping file: {data_file}")
+            continue
+        estimates.append(all_estimates)
+
+    if not estimates:
+        print("⚠️ Nessuna stima valida trovata")
+        return None
 
     avg_estimates = {}
-    for k in all_estimates.keys():
-        k_estimates = []
-        for estimate in estimates:
-            k_estimates += [estimate[k]]
-
-        if trim_test:
-            k_estimates = np.sort(k_estimates)[1:-1]
+    for k in estimates[0].keys():
+        k_estimates = [est[k] for est in estimates if est is not None]
+        if not k_estimates:
+            continue
+        if trim_test and len(k_estimates) > 2:
+            k_estimates = np.sort(k_estimates)[1:-1]  # scarta estremi
         avg_estimates[k] = np.mean(k_estimates)
         avg_estimates[(k, 'std')] = np.std(k_estimates)
-        # w/ test split, we want standard deviation of the mean (our estimate)
-        # w/o test split, each value is a valid estimate, so we just want entry-wise std
         if test_split:
             avg_estimates[(k, 'std')] /= np.sqrt(len(k_estimates))
 
@@ -101,12 +131,15 @@ def dragon_att(output_dir, test_split=True, trim=0.03, trim_test=False):
 def confounding_level():
     # Comparison over compounding strength
     estimates = {}
-    estimates['low'] = dragon_att('../out/PeerRead/buzzy-based-sim/modesimple/beta00.25.beta11.0.gamma0.0')
-    estimates['med'] = dragon_att('../out/PeerRead/buzzy-based-sim/modesimple/beta00.25.beta15.0.gamma0.0')
-    estimates['high'] = dragon_att('../out/PeerRead/buzzy-based-sim/modesimple/beta00.25.beta125.0.gamma0.0')
+    estimates['low'] = dragon_att('../out/PeerRead/c_atm/beta1')
+    estimates['med'] = dragon_att('../out/PeerRead/c_atm/beta5')
+    estimates['high'] = dragon_att('../out/PeerRead/c_atm/beta25')
+
+    print("DEBUG estimates:", estimates)  # 👈 per vedere cosa c’è dentro
+
 
     estimate_df = pd.DataFrame(estimates)
-    with tf.io.gfile.GFile('../out/PeerRead/buzzy-based-sim/estimates.tsv', "w") as writer:
+    with tf.io.gfile.GFile('../out/PeerRead/c_atm/estimates.tsv', "w") as writer:
         writer.write(estimate_df.to_csv(sep="\t"))
 
     print(estimate_df.round(2))
