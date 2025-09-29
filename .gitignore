@@ -428,3 +428,4 @@ auto
 .DS_Store
 *.h5
 *.tfevents.*
+*.h5
