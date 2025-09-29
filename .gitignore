@@ -426,3 +426,5 @@ auto
 
 # os x stuff
 .DS_Store
+*.h5
+*.tfevents.*
