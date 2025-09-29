@@ -1,0 +1,9 @@
+method	low	med	high
+Ground truth	0.06	0.06	0.03
+Unadjusted	0.09	0.14	0.17
+NN ψ^Q	0.07	0.1	0.17
+NN ψ^plugin	0.05	0.08	0.14
+C-ATM ψ^Q	0.12	0.11	0.14
+C-ATM ψ^plugin	-0.0	-0.02	-0.03
+C-BERT ψ^Q	0.07	-0.06	-0.01
+C-BERT ψ^plugin	0.2	-0.13	-0.02

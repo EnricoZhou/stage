@@ -1,0 +1,11 @@
+method	PeerRead (ATT)
+Ground truth	0.06
+Unadjusted	0.14
+BOW ψ^Q	0.06
+BOW ψ^plugin	0.06
+BERT ψ^Q	0.19
+BERT ψ^plugin	0.2
+LDA ψ^Q	0.09
+LDA ψ^plugin	0.09
+ATM ψ^Q	0.08
+ATM ψ^plugin	0.08

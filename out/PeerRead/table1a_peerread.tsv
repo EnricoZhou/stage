@@ -1,0 +1,11 @@
+method	PeerRead (ATT)
+Ground truth	0.06
+Unadjusted	0.14
+NN ψ^Q	0.1
+NN ψ^plugin	0.08
+BERT (sup. only) ψ^Q	0.39
+BERT (sup. only) ψ^plugin	0.39
+C-ATM ψ^Q	0.11
+C-ATM ψ^plugin	-0.02
+C-BERT ψ^qonly	-0.06
+C-BERT ψ^plugin	-0.13
