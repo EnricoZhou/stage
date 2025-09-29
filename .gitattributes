@@ -2,4 +2,6 @@ dat/PeerRead/arxiv.all.zip filter=lfs diff=lfs merge=lfs -text
 *.tfrecord filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.ckpt filter=lfs diff=lfs merge=lfs -text
+*.data-00000-of-00001 filter=lfs diff=lfs merge=lfs -text
+dat/reddit/2018 filter=lfs diff=lfs merge=lfs -text
 *.h5 filter=lfs diff=lfs merge=lfs -text
