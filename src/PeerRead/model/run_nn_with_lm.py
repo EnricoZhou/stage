@@ -46,10 +46,8 @@ def _get_nn_lm_model(vocab_size, hidden_dim, binary_outcome=True):
         optimizer=tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
         loss={
             "g": "binary_crossentropy",
-            # "q0": "binary_crossentropy",
-            # "q1": "binary_crossentropy",
-            "q0": "mse", 
-            "q1": "mse",
+            "q0": "binary_crossentropy",
+            "q1": "binary_crossentropy",
             "recon": "binary_crossentropy",
         },
         loss_weights={
