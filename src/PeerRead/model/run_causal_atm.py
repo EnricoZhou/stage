@@ -36,7 +36,7 @@ flags.DEFINE_string("base_propensities_path", "", "per simulazione basata su pro
 flags.DEFINE_float("exogenous_confounding", 0.0, "quota di confondimento esogeno")
 flags.DEFINE_float("learning_rate", 1e-3, "learning rate per Adam")
 
-flags.DEFINE_float("beta_filter", 1.0, "Se specificato, filtra i record con questo beta1")
+flags.DEFINE_float("beta_filter", 5.0, "Se specificato, filtra i record con questo beta1")
 
 FLAGS = flags.FLAGS
 
