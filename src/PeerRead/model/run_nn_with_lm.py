@@ -10,7 +10,7 @@ import pandas as pd
 # ---------------- FLAGS ---------------- #
 flags.DEFINE_string("mode", "train_and_predict", "train_and_predict or predict_only")
 flags.DEFINE_string("saved_path", None, "Path modello salvato (predict_only)")
-flags.DEFINE_string("prediction_file", "../out/PeerRead/nn/predictions_nn_lm.tsv", "file TSV output predizioni")
+flags.DEFINE_string("prediction_file", "../out/PeerRead/nn_lm/predictions.tsv", "file TSV output predizioni")
 
 flags.DEFINE_string("input_files", "../dat/PeerRead/proc/peerread_all_betas_bow.tfrecord", "TFRecord con bag-of-words")
 flags.DEFINE_integer("train_batch_size", 32, "batch size train")
@@ -19,7 +19,7 @@ flags.DEFINE_integer("num_epochs", 50, "numero di epoche")
 flags.DEFINE_integer("vocab_size", 5000, "dimensione vocabolario")
 flags.DEFINE_integer("hidden_dim", 200, "dimensione hidden encoder")
 flags.DEFINE_float("learning_rate", 1e-4, "learning rate per Adam")
-flags.DEFINE_float("beta_filter", None, "Se specificato, filtra i record con questo beta1")
+flags.DEFINE_float("beta_filter", 5.0, "Se specificato, filtra i record con questo beta1")
 
 FLAGS = flags.FLAGS
 
@@ -46,14 +46,16 @@ def _get_nn_lm_model(vocab_size, hidden_dim, binary_outcome=True):
         optimizer=tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
         loss={
             "g": "binary_crossentropy",
-            "q0": "binary_crossentropy",
-            "q1": "binary_crossentropy",
+            # "q0": "binary_crossentropy",
+            # "q1": "binary_crossentropy",
+            "q0": "mse", 
+            "q1": "mse",
             "recon": "binary_crossentropy",
         },
         loss_weights={
             "g": 1.0,
-            "q0": 1.0,
-            "q1": 1.0,
+            "q0": 0.1,
+            "q1": 0.1,
             "recon": 0.1,  # peso minore per la loss di LM (regolarizzante)
         },
         metrics={"g": ["accuracy"], "q0": ["mse"], "q1": ["mse"]},
@@ -101,10 +103,16 @@ def make_dataset(is_training=True, return_extras=False):
         y = example["outcome"]
         bow = example["bow"]
 
+        # q0 riceve y solo se t=0, altrimenti dummy (0)
+        q0_label = tf.where(tf.equal(t, 0), tf.expand_dims(y, -1), tf.zeros_like(tf.expand_dims(y, -1)))
+
+        # q1 riceve y solo se t=1, altrimenti dummy (0)
+        q1_label = tf.where(tf.equal(t, 1), tf.expand_dims(y, -1), tf.zeros_like(tf.expand_dims(y, -1)))
+
         labels_model = {
             "g": tf.expand_dims(t, -1),
-            "q0": tf.expand_dims(y, -1),
-            "q1": tf.expand_dims(y, -1),
+            "q0": q0_label,
+            "q1": q1_label,
             "recon": bow,  # supervisione non supervisionata: ricostruzione BoW
         }
         labels_extra = {
