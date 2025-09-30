@@ -14,7 +14,7 @@ from PeerRead.dataset.dataset import make_dataset_fn_from_file, make_real_labele
 # ---------------- FLAGS ---------------- #
 flags.DEFINE_string("mode", "train_and_predict", "train_and_predict or predict_only")
 flags.DEFINE_string("saved_path", None, "Path modello salvato (predict_only)")
-flags.DEFINE_string("prediction_file", "../out/PeerRead/bert_full/predictions.tsv", "file TSV output predizioni")
+flags.DEFINE_string("prediction_file", "../out/PeerRead/bert/predictions.tsv", "file TSV output predizioni")
 
 flags.DEFINE_string("input_files", "../dat/PeerRead/proc/arxiv-all.tf_record", "TFRecord input")
 flags.DEFINE_integer("train_batch_size", 16, "batch size train")
