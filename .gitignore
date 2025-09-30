@@ -1,8 +1,8 @@
 logdir/**
 **/tmp/**
 output/**
-dat/**
-pre-trained/**
+# dat/**
+# pre-trained/**
 dat/gender-text-corpus
 .DS_Store
 **/.DS_Store
