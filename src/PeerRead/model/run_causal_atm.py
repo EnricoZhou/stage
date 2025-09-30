@@ -13,10 +13,10 @@ from PeerRead.dataset.dataset import make_buzzy_based_simulated_labeler
 # ---------------- FLAGS ---------------- #
 flags.DEFINE_string("mode", "train_and_predict", "train_and_predict or predict_only")
 flags.DEFINE_string("saved_path", None, "Path modello salvato (predict_only)")
-flags.DEFINE_string("prediction_file", "../out/PeerRead/atm/predictions_atm.tsv", "file TSV output predizioni")
+flags.DEFINE_string("prediction_file", "../out/PeerRead/c_atm/beta1/predictions.tsv", "file TSV output predizioni")
 
 # Dataset
-flags.DEFINE_string("input_files", "../dat/PeerRead/proc/peerread_bow_atm.tfrecord", "TFRecord con bag-of-words")
+flags.DEFINE_string("input_files", "../dat/PeerRead/proc/peerread_all_betas_bow.tfrecord", "TFRecord con bag-of-words")
 flags.DEFINE_integer("train_batch_size", 32, "batch size train")
 flags.DEFINE_integer("eval_batch_size", 32, "batch size eval")
 flags.DEFINE_integer("num_epochs", 20, "numero di epoche")
@@ -28,14 +28,15 @@ flags.DEFINE_integer("hidden_dim", 200, "dimensione hidden encoder")
 flags.DEFINE_string("treatment", "theorem_referenced", "attributo usato come trattamento (es. theorem_referenced, buzzy_title)")
 flags.DEFINE_string("simulated", "real", "real | attribute | propensity")
 flags.DEFINE_float("beta0", 0.25, "forza del trattamento simulato")
-flags.DEFINE_float("beta1", 0.0, "forza del confondimento simulato (1.0=low, 5.0=med, 25.0=high)")
+# non serve più, uso direttamente beta_filter per filtrare
+# flags.DEFINE_float("beta1", None, "forza del confondimento simulato (1.0=low, 5.0=med, 25.0=high)")
 flags.DEFINE_float("gamma", 1.0, "rumore sull’outcome simulato")
 flags.DEFINE_string("simulation_mode", "simple", "modalità di simulazione: simple | multiplicative | interaction")
 flags.DEFINE_string("base_propensities_path", "", "per simulazione basata su propensità")
 flags.DEFINE_float("exogenous_confounding", 0.0, "quota di confondimento esogeno")
 flags.DEFINE_float("learning_rate", 1e-3, "learning rate per Adam")
 
-flags.DEFINE_float("beta_filter", None, "Se specificato, filtra i record con questo beta1")
+flags.DEFINE_float("beta_filter", 1.0, "Se specificato, filtra i record con questo beta1")
 
 FLAGS = flags.FLAGS
 
@@ -56,7 +57,6 @@ def _get_causal_atm_model(vocab_size, num_topics, hidden_dim, binary_outcome=Tru
             "recon": "categorical_crossentropy",
         },
         loss_weights={"g": 1.0, "q0": 0.1, "q1": 0.1, "recon": 0.01},
-        # loss_weights={"g": 1.0, "q0": 1.0, "q1": 1.0, "recon": 0.01},
         metrics={"g": ["accuracy"], "q0": ["mse"], "q1": ["mse"]},
     )
     return model
@@ -75,14 +75,7 @@ def parse_bow_example(example_proto):
 
     parsed = tf.io.parse_single_example(example_proto, feature_description)
 
-    # bow è già float32 → non serve cast da int
-    '''bow = parsed["bow"]
-    bow_sum = tf.reduce_sum(bow)
-    bow = tf.cond(bow_sum > 0, lambda: bow / bow_sum, lambda: bow)'''
-
-    # bow = tf.cast(parsed["bow"], tf.float32)  # usa conteggi raw, niente divisione
     bow = tf.sparse.to_dense(parsed["bow"])
-
 
     features = {
         "bow": bow,
@@ -104,26 +97,6 @@ def make_dataset(is_training=True, return_extras=False):
         dataset = dataset.filter(
             lambda ex: tf.equal(ex["beta1"], tf.cast(FLAGS.beta_filter, tf.float32))
         )
-
-
-    '''def add_labels(example):
-        bow = example["bow"]
-
-        labels_model = {
-            "g": tf.expand_dims(example["treatment"], -1),
-            "q0": tf.expand_dims(example["outcome"], -1),
-            "q1": tf.expand_dims(example["outcome"], -1),
-            "recon": bow,
-        }
-        labels_extra = {
-            "outcome": tf.expand_dims(example["outcome"], -1),
-            "treatment": tf.expand_dims(example["treatment"], -1),
-        }
-
-        if return_extras:
-            return bow, {**labels_model, **labels_extra}
-        else:
-            return bow, labels_model'''
     
     def add_labels(example):
         # usa direttamente treatment/outcome dal TFRecord
@@ -161,14 +134,6 @@ def make_dataset(is_training=True, return_extras=False):
 # ---------------- MAIN ---------------- #
 def main(_):
     tf.random.set_seed(0)
-
-    '''raw_dataset = tf.data.TFRecordDataset(FLAGS.input_files)
-    for raw_example in raw_dataset.take(1):
-        example_proto = tf.train.Example()
-        example_proto.ParseFromString(raw_example.numpy())
-        print(example_proto)
-    '''
-
 
     model = _get_causal_atm_model(
         vocab_size=FLAGS.vocab_size,
