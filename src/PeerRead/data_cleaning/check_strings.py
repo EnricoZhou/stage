@@ -1,3 +1,4 @@
+# conta le feature di tipo stringa.
 import tensorflow as tf
 
 path = "../dat/PeerRead/proc/arxiv-all-final.tf_record"
