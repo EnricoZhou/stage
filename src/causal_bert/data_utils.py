@@ -207,6 +207,7 @@ def dataset_to_pandas_df(dataset):
             samp_dict[k] += [v.numpy().squeeze()]
 
     # AGGIUNTO
+    # Gestisce i casi in cui v è vuoto, evitando errori durante la concatenazione.
     proto_dict = {}
     for k, v in samp_dict.items():
         if len(v) > 0:
