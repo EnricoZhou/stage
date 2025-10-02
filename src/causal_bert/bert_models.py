@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 import tensorflow_hub as hub
+# Incompatibilità con TF 2.0
 # from tensorflow.keras.layers import Lambda
 
 # AGGOIUNTO
@@ -205,6 +206,8 @@ def derpy_dragon_baseline(bert_config,
     bert_model.trainable = False
     sequence_output = bert_model.outputs[1]
     # sum_sequence_output = tf.reduce_sum(sequence_output, axis=1)
+    # AGGIUNTO
+    # Trasformazione in un layer per poter dare un nome
     sum_sequence_output = keras.layers.Lambda(lambda x: tf.reduce_sum(x, axis=1))(sequence_output)
     sum_sequence_output = tf.keras.layers.Dense(500, activation='relu')(sum_sequence_output)
     sum_sequence_output = tf.keras.layers.Dense(200, activation='relu')(sum_sequence_output)
@@ -272,6 +275,8 @@ def cross_ent(y_true, y_pred, sample_weight):
 
     return dragon_model, bert_model'''
 
+# AGGIUNTO
+# Layer che calcola la media di un tensore e lo scala
 class MeanLossLayer(tf.keras.layers.Layer):
     def __init__(self, scale=1.0, **kwargs):
         super().__init__(**kwargs)
@@ -281,6 +286,7 @@ class MeanLossLayer(tf.keras.layers.Layer):
         return self.scale * tf.reduce_mean(x)
     
 # AGGIUNTO
+# Layer che aggiunge una loss non supervisionata al modello
 class UnsupervisedLossLayer(tf.keras.layers.Layer):
     def __init__(self, scale=1.0, **kwargs):
         super().__init__(**kwargs)
@@ -327,8 +333,8 @@ def dragon_model(bert_config,
         # unsup_loss = unsup_scale * tf.reduce_mean(pt_model.output)
 
         # AGGIUNTO
+        # Permette di integrare la unsupervised loss come parte del modello
         unsup_loss = MeanLossLayer(scale=unsup_scale, name="unsup_loss")(pt_model.output)
-
 
         # Ottieni pooled_output dal backbone BERT
         pooled_output, sequence_output = bert_model.outputs
@@ -458,6 +464,7 @@ def hydra_model(bert_config,
 
         inputs = pt_model.input
         unsup_loss = pt_model.outputs
+        # Calcola la unsupervised loss come media della loss e la integra come parte del modello.
         unsup_loss = tf.keras.layers.Lambda(lambda x: tf.reduce_mean(x), name="bert_pretrain_loss_and_metric_layer")(unsup_loss)
         # unsup_loss = unsup_scale * tf.reduce_mean(unsup_loss)
 
@@ -579,7 +586,8 @@ if __name__ == '__main__':
 
 
 # AGGIUNTO
-
+# Modello semplice MLP (no BERT) con input bag-of-words e tre uscite: g, q0, q1.
+# Per implementare diretta della rete neurale
 def no_dragon_model(input_dim=5000, binary_outcome=True):
     """
     Baseline 'no-dragon': semplice MLP senza BERT.
