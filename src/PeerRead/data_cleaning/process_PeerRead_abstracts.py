@@ -35,6 +35,7 @@ rng = random.Random(0)
 
 
 # AGGIUNTO
+# processa il paper JSON e restituisce solo valori numeriche o booleane per il contesto
 def process_json_paper(paper_json_filename, scienceparse_dir, tokenizer):
     paper = Paper.from_json(paper_json_filename)
     paper.SCIENCEPARSE = ScienceParseReader.read_science_parse(paper.ID, paper.TITLE, paper.ABSTRACT,
