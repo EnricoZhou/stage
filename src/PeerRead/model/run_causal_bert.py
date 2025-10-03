@@ -126,6 +126,7 @@ flags.DEFINE_string("simulation_mode", 'simple', "simple, multiplicative, or int
 flags.DEFINE_string("prediction_file", "../output/predictions.tsv", "path where predictions (tsv) will be written")
 
 # AGGIUNTO
+# flag per modello MLP semplice (senza BERT) come baseline.
 flags.DEFINE_bool("no_dragon", False, "Use simple MLP baseline without BERT")
 
 FLAGS = flags.FLAGS
@@ -345,8 +346,9 @@ def main(_):
     #
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
     epochs = FLAGS.num_train_epochs
+    # addestramento su tutto il dataset
     train_data_size = 11778
-    # train_data_size = 100
+    # train_data_size = 5000
     steps_per_epoch = int(train_data_size / FLAGS.train_batch_size)  # 368
     warmup_steps = int(epochs * train_data_size * 0.1 / FLAGS.train_batch_size)
     initial_lr = FLAGS.learning_rate
