@@ -427,6 +427,7 @@ def dataset_processing(dataset, parser, masker, labeler,
                               _make_bert_compatifier(do_masking))  # Limit features to those expected by BERT model
 
     # AGGIUNTO
+    # Ottimizza la pipeline dati con parallelismo automatico, caching e prefetching per migliorare le prestazioni.
     dataset = dataset.map(data_processing, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.cache()
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
@@ -495,15 +496,18 @@ def make_dataset_fn_from_file(input_files_or_glob, seq_length,
                                                    num_splits, dev_splits, test_splits,
                                                    batch_size, filter_test, shuffle_buffer_size)
             return processed_dataset
-
+        
+        # MODIFICATO
         # dataset = dataset.interleave(_dataset_processing)
 
+        # AGGIUNTO
+        # Ottimizza l'interleave con parallelismo automatico 
         dataset = dataset.interleave(
             lambda x: _dataset_processing(x),
             cycle_length=tf.data.AUTOTUNE,
             num_parallel_calls=tf.data.AUTOTUNE
         )
-
+        # prefetching per migliorare le prestazioni della pipeline.
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
 
@@ -618,9 +622,10 @@ def main():
     dev_splits = []
     test_splits = [1, 2]
 
+    # per dati simulati
     labeler = make_buzzy_based_simulated_labeler(0.5, 5.0, 0.0, 'simple',
                                                  seed=0)
-
+    # per i dati reali
     # labeler = make_real_labeler('venue', 'accepted')
 
     input_dataset_from_filenames = make_dataset_fn_from_file(filename,
